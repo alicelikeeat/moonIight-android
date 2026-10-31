@@ -150,7 +150,7 @@ fun TimedHoldGroup(p: V5Prefs, up: V5Update) {
 /** 录屏. */
 @Composable
 fun RecordGroup(p: V5Prefs, up: V5Update) {
-    SettingsGroup("录屏", footer = "从 底部标签 ··· / 内容的 ··· / 全部按键 开始；顶部的 ⏹ 胶囊或通知停止。保存在 库。受保护（DRM）的内容可能录成黑屏，月光不会绕过。") {
+    SettingsGroup("录屏", footer = "从 底部标签 ··· / 内容的 ··· / 全部按键 开始；顶部的 ⏹ 胶囊或通知停止。保存在 库。受保护（DRM）的内容可能录成黑屏，月淡不会绕过。") {
         V5Toggle("录制应用声音", if (android.os.Build.VERSION.SDK_INT >= 29) "Android 10+ · 允许被录制的声音" else "需要 Android 10 或更新", Icons.Outlined.GraphicEq, p.recordAppAudio, Color(0xFF7FD1AE)) { v -> up { it.copy(recordAppAudio = v) } }
         SettingsDivider()
         V5Toggle("麦克风", "同时录入你的声音（需要录音权限）", Icons.Outlined.Mic, p.recordMic, Color(0xFFFF8A7A)) { v -> up { it.copy(recordMic = v) } }

@@ -170,6 +170,13 @@ class SettingsActions(
     val showGestures: () -> Unit = {},
     /** v5.0 options (朋友圈自动播放, 定时长按, 录屏, 星轨速度, 删除). */
     val updateV5: V5Update = {},
+    val setHoldPresent: (String) -> Unit = {},
+    val setTabDock: (String) -> Unit = {},
+    val setPortraitPlayback: (Boolean) -> Unit = {},
+    val setVirtualFriends: (Boolean) -> Unit = {},
+    val setVirtualInterval: (Int) -> Unit = {},
+    val setVirtualProvider: (String) -> Unit = {},
+    val setVirtualKey: (String) -> Unit = {},
 )
 
 private fun platformSubtitle(id: String, s: SettingsRepository.Snapshot) = when (id) {
@@ -375,7 +382,7 @@ private fun SettingsMain(onOpenSources: () -> Unit) {
         setHomeBgDim = { v -> scope.launch { app.settings.setHomeBgDim(v) } },
         setHomeBgAll = { v -> scope.launch { app.settings.setHomeBgAllPages(v) } },
         openFriends = { com.moonlight.feed.ui.AppBus.goTab.tryEmit(4); com.moonlight.feed.ui.AppBus.send(com.moonlight.feed.ui.AppEvent.SOCIAL_FRIENDS) },
-        exportSocial = { exportLauncher.launch("月光-朋友圈备份-" + java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.CHINA).format(java.util.Date()) + ".json") },
+        exportSocial = { exportLauncher.launch("月淡-朋友圈备份-" + java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.CHINA).format(java.util.Date()) + ".json") },
         importSocial = { importLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
         editServerUrl = { edit("聊天服务器地址", s.chatServerUrl, "例如 https://chat.example.com（仅保存，暂不连接）") { v -> app.settings.setChatServerUrl(v.lines().firstOrNull().orEmpty()) } },
         openSources = onOpenSources,
@@ -455,6 +462,13 @@ private fun SettingsMain(onOpenSources: () -> Unit) {
             MoonToaster.show("已恢复 ${hidden.size} 项", Icons.Outlined.Restore)
         },
         showGestures = { overlay.showSheet("手势") { _ -> GestureGuide() } },
+        setHoldPresent = { v -> scope.launch { app.settings.setHoldPresent(v) } },
+        setTabDock = { v -> scope.launch { app.settings.setTabDock(v) } },
+        setPortraitPlayback = { v -> scope.launch { app.settings.setPortraitPlayback(v) } },
+        setVirtualFriends = { v -> scope.launch { app.settings.setVirtualFriends(v) } },
+        setVirtualInterval = { v -> scope.launch { app.settings.setVirtualInterval(v) } },
+        setVirtualProvider = { v -> scope.launch { app.settings.setVirtualProvider(v) } },
+        setVirtualKey = { v -> scope.launch { app.settings.setVirtualKey(v) } },
     )
     SettingsContent(s, actions, hiddenCount = app.library.items.collectAsState().value.count { it.hidden }, userSources = userSources, social = social, appIcon = appIcon)
 }
@@ -496,6 +510,8 @@ fun SettingsContent(s: SettingsRepository.Snapshot, a: SettingsActions, hiddenCo
                 com.moonlight.feed.data.MenuSelect.entries.map { it.label }, sel.ordinal,
             ) { a.setMenuSelect(com.moonlight.feed.data.MenuSelect.entries[it].name) }
             SettingsDivider()
+            YuedanAppearanceRows(s, a)
+            SettingsDivider()
             RingAnimRows(s, a)
             SettingsDivider()
             StarSpeedRows(v5, a.updateV5)
@@ -512,6 +528,8 @@ fun SettingsContent(s: SettingsRepository.Snapshot, a: SettingsActions, hiddenCo
         HomeBackgroundGroup(s, a)
 
         SettingsGroup("播放") {
+            YuedanPlaybackRow(s, a)
+            SettingsDivider()
             val vd = com.moonlight.feed.data.VideoFit.of(s.videoDisplay)
             SegmentRow(
                 "视频显示", when (vd) {
@@ -553,6 +571,8 @@ fun SettingsContent(s: SettingsRepository.Snapshot, a: SettingsActions, hiddenCo
             SettingsDivider()
             Toggle("播放进度线", "沉浸播放时底部细线", Icons.Outlined.LinearScale, s.showProgressWhilePlaying, a.setShowProgress, Color(0xFF6FB7E8))
         }
+
+        YuedanVirtualGroup(s, a)
 
         SettingsGroup("网址源", footer = "手动添加任意公开网页；随机抓取同站图片与视频并插入信息流。遵守 robots.txt，不登录、不绕过验证。") {
             SettingsRow(
@@ -617,14 +637,14 @@ fun SettingsContent(s: SettingsRepository.Snapshot, a: SettingsActions, hiddenCo
         }
 
         SettingsGroup("关于", footer = "仅使用官方嵌入与公开 API / 直链；不破解 DRM、不扒流、不绕过签名、不抓取登录 Cookie。抖音 / TikTok / 快手 / 小红书 / 西瓜 / 优酷 / 爱奇艺 / 腾讯视频不支持。") {
-            SettingsRow("月光", subtitle = "Moonlight · v5.0 · 多源信息流 · 朋友圈", icon = Icons.Outlined.Info, chevron = false)
+            SettingsRow("月淡", subtitle = "v6.0 · 对齐 iOS 1.43 · 多源信息流 · 朋友圈", icon = Icons.Outlined.Info, chevron = false)
         }
         Spacer(Modifier.height(120.dp))
     }
 }
 
 @Composable
-private fun Toggle(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, checked: Boolean, onChange: (Boolean) -> Unit, tint: Color? = null) {
+internal fun Toggle(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, checked: Boolean, onChange: (Boolean) -> Unit, tint: Color? = null) {
     SettingsRow(
         title, subtitle = subtitle, icon = icon, iconTint = tint,
         onClick = { onChange(!checked) },
@@ -838,7 +858,7 @@ fun SocialSettingsGroups(s: SettingsRepository.Snapshot, a: SettingsActions, soc
             SettingsRow("导入备份", subtitle = "合并或替换", icon = Icons.Outlined.Download, iconTint = Color(0xFF6FB7E8), onClick = a.importSocial)
         }
 
-        SettingsGroup("聊天服务器", footer = "现在所有对话都在本机离线进行。之后可连接自建服务器，让月光成为真正的聊天工具——协议草案见项目 docs/CHAT_PROTOCOL.md。") {
+        SettingsGroup("聊天服务器", footer = "现在所有对话都在本机离线进行。之后可连接自建服务器，让月淡成为真正的聊天工具——协议草案见项目 docs/CHAT_PROTOCOL.md。") {
             SettingsRow(
                 "服务器地址", subtitle = s.chatServerUrl.ifBlank { "未设置" }, icon = Icons.Outlined.Dns, iconTint = Color(0xFFB59AF5), onClick = a.editServerUrl,
             )
@@ -883,6 +903,10 @@ fun gestureGuide(mode: com.moonlight.feed.data.MenuSelect): List<Pair<String, St
         "库" to "点按缩略图 = 打开 · 长按 = 收藏 · 发朋友圈 · 分享·保存 · 多选",
         "消息" to "长按消息 = 复制 · 回复 · 改发言人 · 撤回",
         "● 拍摄" to "点按打开相机；长按 = 拍照 · 录像 · 导入 · 发朋友圈",
+        "底栏" to "手指从底栏开始：横向拖动切换页面；静止长按打开该按钮的圆环，不会顺手切页。内容画在底栏下面时，落在底栏上的手指仍归底栏",
+        "滚动" to "手指一移动，长按就失败；快速滑动保持为滚动。列表还在拖动或减速时不开始长按。点按和长按互斥",
+        "菜单样式" to "弹出菜单（默认）/ 跟手圆形玻璃 / 水滴融合（可选，默认关闭）/ 玻璃气泡分离。旋转、荷花、星轨、月光仍是打开动画",
+        "发现" to "右上角切换单列或双列，横幅大小可调。下拉刷新。首页可随机添加 10 / 15 / 20 条",
         "动画" to "设置 › 外观 › 长按动画：旋转 / 荷花（花苞绽放）/ 星轨（按钮沿弧线从远处飞来）/ 月光（全屏暗下，只照亮按钮）/ 随机",
 ).flatMap { r -> if (r == MENU_SELECT_ROWS) menuSelectRows(mode) else listOf(@Suppress("UNCHECKED_CAST") (r as Pair<String, String>)) }
 
@@ -912,7 +936,7 @@ val GESTURE_GUIDE: List<Pair<String, String>> get() = gestureGuide(com.moonlight
 @Composable
 fun AppIconGroup(current: com.moonlight.feed.data.AppIcon, a: SettingsActions) {
     val c = LocalMoonColors.current
-    SettingsGroup("应用图标", footer = "预设图标会替换桌面上的月光图标。「用照片做桌面图标」是另外添加一个主屏幕快捷方式，能否添加由桌面应用决定；视频只能取一帧（安卓不支持动态图标）。") {
+    SettingsGroup("应用图标", footer = "预设图标会替换桌面上的月淡图标。「用照片做桌面图标」是另外添加一个主屏幕快捷方式，能否添加由桌面应用决定；视频只能取一帧（安卓不支持动态图标）。") {
         Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             com.moonlight.feed.data.AppIcon.entries.forEach { i ->
                 val on = i == current

@@ -1,6 +1,13 @@
 package com.moonlight.feed.ui.design
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.sp
+import com.moonlight.feed.data.PointerDecision
+import com.moonlight.feed.data.TabDock
+import com.moonlight.feed.data.TouchOrigin
+import com.moonlight.feed.data.YuedanGesture
 
 import androidx.compose.foundation.layout.widthIn
 
@@ -89,8 +96,9 @@ fun tabBack(tab: Int): Int? = when (tab) { 0 -> null; 1, 3 -> TAB_ME; 5 -> 4; el
 fun tabSlot(tab: Int) = TAB_SLOTS.indexOf(tabOwner(tab)).coerceAtLeast(0)
 
 /**
- * Floating frosted capsule tab bar: 首页 · 发现 · [●] · 朋友圈 · 我.
- * Spring-animated selection pill; long-press tabs = quick actions; centre = capture (tap) / menu (long-press).
+ * Bottom dock: five separate glass circles, or one sliding bar.
+ * A finger that starts here owns drag-to-switch. A still hold opens that button's ring.
+ * A quick move cancels the hold. Content underneath does not receive the touch.
  */
 @Composable
 fun GlassTabBar(
@@ -103,6 +111,7 @@ fun GlassTabBar(
     badges: Map<Int, Int> = emptyMap(),
 ) {
     val c = LocalMoonColors.current
+    val circles = MenuStyle.tabDock != TabDock.SLIDER
     val barSkin = rememberButtonSkin("tab.bar")
     val anchors = remember { List(MoonTabs.size) { AnchorState() } }
     val captureAnchor = remember { AnchorState() }
@@ -110,24 +119,13 @@ fun GlassTabBar(
         modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 10.dp)
+            .padding(horizontal = if (circles) 10.dp else 20.dp, vertical = 8.dp)
+            .tabDragSwitch { index ->
+                val tab = TAB_SLOTS.getOrNull(index) ?: return@tabDragSwitch
+                if (tab >= 0) onSelect(tab)
+            }
     ) {
-        BoxWithConstraints(
-            Modifier
-                .fillMaxWidth()
-                .height(64.dp)
-                .skinOr(barSkin, CircleShape) { glass(CircleShape, c, elevation = 20.dp, blurRadius = 30.dp) }
-                .padding(6.dp)
-        ) {
-            val itemW = maxWidth / TAB_SLOTS.size
-            val x by animateDpAsState(itemW * tabSlot(selected), spring(dampingRatio = 0.72f, stiffness = 420f), label = "tabx")
-            Box(
-                Modifier
-                    .offset(x = x)
-                    .width(itemW)
-                    .fillMaxHeight()
-                    .background(c.accent.copy(alpha = if (c.dark) 0.16f else 0.18f), CircleShape)
-            )
+        val row: @Composable () -> Unit = {
             Row(Modifier.fillMaxWidth().fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
                 for (slot in TAB_SLOTS.indices) {
                     if (TAB_SLOTS[slot] == -1) {
@@ -140,6 +138,7 @@ fun GlassTabBar(
                     TabItem(
                         spec = MoonTabs[i],
                         selected = i == tabOwner(selected),
+                        circles = circles,
                         badge = badges[i] ?: 0,
                         modifier = Modifier.weight(1f).fillMaxHeight().anchor(anchors[i]),
                         onClick = { onSelect(i) },
@@ -148,6 +147,44 @@ fun GlassTabBar(
                     )
                 }
             }
+        }
+        if (circles) {
+            Box(Modifier.fillMaxWidth().height(78.dp)) { row() }
+        } else {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .skinOr(barSkin, CircleShape) { glass(CircleShape, c, elevation = 20.dp, blurRadius = 30.dp) }
+                    .padding(horizontal = 4.dp),
+            ) { row() }
+        }
+    }
+}
+
+/** Horizontal movement on the dock switches tabs. A still finger is left for tap / long-press. */
+private fun Modifier.tabDragSwitch(onSlot: (Int) -> Unit): Modifier = pointerInput(onSlot) {
+    val slop = 18.dp.toPx()
+    val barWidth = size.width.toFloat()
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val origin = down.position
+        val t0 = down.uptimeMillis
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            val dx = change.position.x - origin.x
+            val dy = change.position.y - origin.y
+            val decision = YuedanGesture.route(
+                TouchOrigin.TAB_BAR, dx, dy, change.uptimeMillis - t0, slop, listBusy = false,
+            )
+            if (decision == PointerDecision.BAR_DRAG) {
+                change.consume()
+                onSlot(YuedanGesture.tabIndexAt(change.position.x, barWidth, TAB_SLOTS.size))
+            } else if (decision == PointerDecision.SCROLL || decision == PointerDecision.LONG_PRESS) {
+                break
+            }
+            if (!change.pressed) break
         }
     }
 }
@@ -186,7 +223,7 @@ fun CaptureButton(modifier: Modifier = Modifier, onClick: () -> Unit, onLongClic
 }
 
 @Composable
-private fun TabItem(spec: TabSpec, selected: Boolean, modifier: Modifier, onClick: () -> Unit, onLongClick: () -> Unit, badge: Int = 0, skinId: String? = null) {
+private fun TabItem(spec: TabSpec, selected: Boolean, modifier: Modifier, onClick: () -> Unit, onLongClick: () -> Unit, badge: Int = 0, skinId: String? = null, circles: Boolean = true) {
     val c = LocalMoonColors.current
     val skin = rememberButtonSkin(skinId)
     val bounce = remember { Animatable(1f) }
@@ -194,17 +231,27 @@ private fun TabItem(spec: TabSpec, selected: Boolean, modifier: Modifier, onClic
         if (selected) { bounce.snapTo(0.78f); bounce.animateTo(1f, spring(dampingRatio = 0.38f, stiffness = 600f)) }
     }
     Column(
-        modifier.moonPress(onClick, onLongClick, pressedScale = 0.88f, highlightShape = null)
-            .then(if (skin != null) Modifier.padding(horizontal = 3.dp, vertical = 1.dp).skinFill(skin, CircleShape) else Modifier),
+        modifier.moonPress(onClick, onLongClick, pressedScale = 0.9f, highlightShape = null),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
     ) {
-        Box {
+        Box(
+            Modifier
+                .size(if (circles) 52.dp else 40.dp)
+                .graphicsLayer { scaleX = bounce.value; scaleY = bounce.value }
+                .then(
+                    if (skin != null) Modifier.skinFill(skin, CircleShape)
+                    else if (circles) Modifier.glass(CircleShape, c, blurRadius = 18.dp)
+                        .border(if (selected) 1.5.dp else 0.6.dp, if (selected) c.accent.copy(0.7f) else Color.White.copy(0.28f), CircleShape)
+                    else Modifier
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
             Icon(
                 if (selected) spec.selectedIcon else spec.icon,
                 spec.label,
                 tint = if (skin != null) skin.ink.copy(alpha = if (selected) 1f else 0.82f) else if (selected) c.accent else c.textDim,
-                modifier = Modifier.size(22.dp).graphicsLayer { scaleX = bounce.value; scaleY = bounce.value },
+                modifier = Modifier.size(22.dp),
             )
             if (badge > 0) Box(
                 Modifier.align(Alignment.TopEnd).offset(x = 9.dp, y = (-4).dp).height(15.dp).widthIn(min = 15.dp)

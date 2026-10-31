@@ -251,6 +251,10 @@ internal fun RadialLayer(spec: MenuSpec, state: MoonOverlayState) {
         }
 
         val cp = geo.center
+        val present = MenuStyle.present
+        val liveFinger = state.finger
+        val tracking = present == com.moonlight.feed.data.HoldPresent.TRACK && state.fingerDown && liveFinger != null && !closing
+        val shift = if (tracking) liveFinger - origin else Offset.Zero
         val sub = state.subIndex
         // ---- per-button pose for this frame. Values the buttons use are captured as plain locals below (never read from
         // shared arrays inside graphicsLayer/layout blocks: with strong skipping those lambdas are reused and would keep stale
@@ -280,8 +284,13 @@ internal fun RadialLayer(spec: MenuSpec, state: MoonOverlayState) {
                 else -> mp.coerceIn(0f, 1f)
             }
             val q = RingMotion.pose(style, o, cl, closing, poses[i], if (style == RingAnim.STAR) RingMotion.starDepth(i) else 1f)
-            val p = place(i, q)
-            os[i] = o; cls[i] = cl; xs[i] = p.x; ys[i] = p.y; ss[i] = q.scale; al[i] = q.alpha; ex[i] = q.fx; ex2[i] = q.fx2
+            var p = place(i, q) + shift
+            if (present == com.moonlight.feed.data.HoldPresent.BUBBLE && o < 0.999f) {
+                val side = com.moonlight.feed.data.HoldPresent.bubbleStart(cp.x, cp.y, wPx, hPx)
+                p += Offset(side.first * (1f - o), side.second * (1f - o))
+            }
+            val bubbleScale = if (present == com.moonlight.feed.data.HoldPresent.BUBBLE) 0.32f + 0.68f * o.coerceIn(0f, 1f) else 1f
+            os[i] = o; cls[i] = cl; xs[i] = p.x; ys[i] = p.y; ss[i] = q.scale * bubbleScale; al[i] = q.alpha; ex[i] = q.fx; ex2[i] = q.fx2
             rot[i] = q.rot; ex3[i] = q.fx3
             frame += (i + 1) * (o * 3.1f + cl * 1.7f) + p.x * 1e-3f + p.y * 1e-4f
         }
@@ -305,18 +314,32 @@ internal fun RadialLayer(spec: MenuSpec, state: MoonOverlayState) {
                 }
             }
         }
+        val hub = cp + shift
+        if (present == com.moonlight.feed.data.HoldPresent.DROPLET && style != RingAnim.MOON) {
+            val dropletAlpha = mp.coerceIn(0f, 1f)
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                val glass = Color.White.copy(alpha = 0.20f * dropletAlpha)
+                val bridge = Color(0xFFD7E6FF).copy(alpha = 0.18f * dropletAlpha)
+                drawCircle(glass, itemR * 1.35f, hub)
+                for (i in 0 until n) {
+                    val p = Offset(xs[i], ys[i])
+                    drawCircle(glass, itemR * 1.05f, p)
+                    drawCircle(bridge, itemR * 0.7f, Offset((hub.x + p.x) / 2f, (hub.y + p.y) / 2f))
+                }
+            }
+        }
 
         // centre: ··· (all other actions, grouped, in a frosted sheet) — or a small puck when there's nothing more
         val puck = if (more) 40.dp else 30.dp
         val puckHalf = with(density) { (puck / 2).toPx() }
         // title / hovered label (拖动): a pill in a clear band (top, or bottom when the ring sits high)
         val label = hovered?.let { items[it].title } ?: spec.title
-        val ringTop = cp.y - radius - itemR - labelPad
+        val ringTop = hub.y - radius - itemR - labelPad
         val topBand = bounds.top + with(density) { 28.dp.toPx() }
-        val ly = if (ringTop > topBand + with(density) { 40.dp.toPx() }) topBand else (cp.y + radius + itemR + labelPad + with(density) { 36.dp.toPx() }).coerceAtMost(bounds.bottom - with(density) { 24.dp.toPx() })
+        val ly = if (ringTop > topBand + with(density) { 40.dp.toPx() }) topBand else (hub.y + radius + itemR + labelPad + with(density) { 36.dp.toPx() }).coerceAtMost(bounds.bottom - with(density) { 24.dp.toPx() })
 
         Box(
-            Modifier.offset { IntOffset((cp.x - puckHalf).toInt(), (cp.y - puckHalf).toInt()) }
+            Modifier.offset { IntOffset((hub.x - puckHalf).toInt(), (hub.y - puckHalf).toInt()) }
                 .size(puck).graphicsLayer { alpha = mp.coerceIn(0f, 1f); scaleX = 0.6f + 0.4f * mp; scaleY = scaleX }
                 .then(if (more) Modifier.moonPress({ if (!closing && state.openSheet(spec) == RingTap.SHEET) Haptics.tick(view) }, highlightShape = CircleShape, hapticOnClick = false) else Modifier)
                 .skinOr(skMore, CircleShape) { glass(CircleShape, colors, blurRadius = 16.dp).border(0.5.dp, Color.White.copy(0.35f), CircleShape) },
@@ -356,7 +379,7 @@ internal fun RadialLayer(spec: MenuSpec, state: MoonOverlayState) {
             CompositionLocalProvider(LocalMoonColors provides (if (style == RingAnim.MOON) MediaGlass else colors)) {
                 // label sits radially outside the button so neighbours never collide
                 val gap = with(density) { 5.dp.toPx() }
-                val dx0 = p.x - cp.x; val dy0 = p.y - cp.y
+                val dx0 = p.x - hub.x; val dy0 = p.y - hub.y
                 val dl = kotlin.math.sqrt(dx0 * dx0 + dy0 * dy0).coerceAtLeast(1f)
                 val ux = dx0 / dl; val uy = dy0 / dl
                 val labelStyle = when {
@@ -403,7 +426,7 @@ internal fun RadialLayer(spec: MenuSpec, state: MoonOverlayState) {
             val angles = RadialGeometry.subArc(geo.angles[sub!!], kids.size, r2, with(density) { 58.dp.toPx() })
             kids.forEachIndexed { j, k ->
                 val a0 = Math.toRadians(angles[j].toDouble())
-                val raw = Offset(cp.x + r2 * cos(a0).toFloat(), cp.y + r2 * sin(a0).toFloat())
+                val raw = Offset(hub.x + r2 * cos(a0).toFloat(), hub.y + r2 * sin(a0).toFloat())
                 val q = Offset(raw.x.coerceIn(bounds.left + chipR, bounds.right - chipR), raw.y.coerceIn(bounds.top + chipR, bounds.bottom - chipR))
                 val sa = remember(spec, sub, j) { Animatable(if (inspect || MenuStyle.debugProgress != null) 1f else 0f) }
                 LaunchedEffect(spec, sub, j) { delay(j * 22L); sa.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 520f)) }
@@ -494,6 +517,9 @@ object MenuStyle {
     var animSet by androidx.compose.runtime.mutableStateOf(com.moonlight.feed.data.RingAnim.CHOICES.toSet())
     /** v5.0 星轨速度 (0.5…2×); the settings slider writes it live for the 试一试 preview. */
     var starSpeed by androidx.compose.runtime.mutableFloatStateOf(1f)
+    /** v6.0 menu presentation. Popover is the default; 水滴 is opt-in. */
+    var present by androidx.compose.runtime.mutableStateOf(com.moonlight.feed.data.HoldPresent.POPOVER)
+    var tabDock by androidx.compose.runtime.mutableStateOf(com.moonlight.feed.data.TabDock.CIRCLES)
 }
 
 /** Soft shadow so light text reads on any content (dark shadow under light text, light under dark). */

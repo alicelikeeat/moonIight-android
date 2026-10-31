@@ -83,7 +83,7 @@ object IconShortcut {
     fun supported(ctx: Context) = ShortcutManagerCompat.isRequestPinShortcutSupported(ctx)
 
     /** Asks the launcher to pin a shortcut that opens 月光 with [path] framed by [f]. Returns false if unsupported. */
-    fun pin(ctx: Context, path: String, f: MediaFocus, label: String = "月光"): Boolean {
+    fun pin(ctx: Context, path: String, f: MediaFocus, label: String = "月淡"): Boolean {
         if (!supported(ctx)) return false
         val src = BitmapFactory.decodeFile(path) ?: return false
         val icon = render(src, f)

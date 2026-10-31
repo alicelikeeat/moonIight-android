@@ -539,7 +539,7 @@ private fun SocialHost(stack: MutableList<SRoute>) {
 }
 
 private fun copy(ctx: Context, text: String) {
-    (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("月光", text))
+    (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("月淡", text))
     MoonToaster.show("已复制", Icons.Outlined.ContentCopy)
 }
 

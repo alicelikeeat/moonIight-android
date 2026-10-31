@@ -214,7 +214,7 @@ fun LibraryScreen() {
             title = if (entries.size == 1) "删除这条内容？" else "删除 ${entries.size} 项？",
             message = "应用内文件会被移除，可选同时删除相册副本",
             actions = listOf(
-                MenuAction("从月光移除", destructive = true, subtitle = "移到 最近删除，${com.moonlight.feed.data.V5.prefs.trashDays} 天内可恢复") {
+                MenuAction("从月淡移除", destructive = true, subtitle = "移到 最近删除，${com.moonlight.feed.data.V5.prefs.trashDays} 天内可恢复") {
                     TrashUi.trashEntries(entries) { selectionMode = false; selectedIds = emptySet() }
                 },
                 MenuAction("同时从相册删除", destructive = true) {

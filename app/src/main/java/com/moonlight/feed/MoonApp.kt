@@ -9,6 +9,7 @@ import com.moonlight.feed.data.LibraryRepository
 import com.moonlight.feed.data.SettingsRepository
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class MoonApp : Application(), ImageLoaderFactory {
@@ -52,12 +53,27 @@ class MoonApp : Application(), ImageLoaderFactory {
             com.moonlight.feed.ui.design.MenuStyle.select = com.moonlight.feed.data.MenuSelect.of(it.menuSelect)
             com.moonlight.feed.ui.design.MenuStyle.anim = it.ringAnim
             com.moonlight.feed.ui.design.MenuStyle.animSet = com.moonlight.feed.data.RingAnimPick.parseSet(it.ringAnimSet)
+            com.moonlight.feed.ui.design.MenuStyle.present = com.moonlight.feed.data.HoldPresent.of(it.holdPresent)
+            com.moonlight.feed.ui.design.MenuStyle.tabDock = com.moonlight.feed.data.TabDock.of(it.tabDock)
             com.moonlight.feed.ui.design.ButtonSkins.prefs = it.buttonSkinPrefs()
             com.moonlight.feed.data.V5.prefs = it.v5Prefs()
             com.moonlight.feed.ui.design.MenuStyle.starSpeed = com.moonlight.feed.data.V5.prefs.starSpeed
             if (!purged) { purged = true; val days = com.moonlight.feed.data.V5.prefs.trashDays
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { trash.purge(days) } }
         } }
+        // Virtual-friend posts stay off until the user turns them on, then wait out the chosen interval.
+        kotlinx.coroutines.MainScope().launch {
+            var last = System.currentTimeMillis()
+            while (true) {
+                kotlinx.coroutines.delay(60_000)
+                val snap = settings.flow.first()
+                if (!snap.virtualFriends) continue
+                val wait = com.moonlight.feed.data.VirtualCopy.intervalMinutes(snap.virtualInterval) * 60_000L
+                if (System.currentTimeMillis() - last < wait) continue
+                val posted = runCatching { com.moonlight.feed.data.VirtualFriends.tick(this@MoonApp, snap) }.getOrDefault(false)
+                if (posted) last = System.currentTimeMillis()
+            }
+        }
     }
 
     override fun newImageLoader(): ImageLoader =
