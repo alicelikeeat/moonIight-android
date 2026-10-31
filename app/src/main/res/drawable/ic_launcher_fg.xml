@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- soft moon -->
+    <path
+        android:fillColor="#F5F7FA"
+        android:pathData="M54,30c13.25,0 24,10.75 24,24s-10.75,24 -24,24c-4.2,0 -8.13,-1.08 -11.55,-2.98 7.2,-2.7 12.3,-9.55 12.3,-17.52 0,-7.97 -5.1,-14.82 -12.3,-17.52C45.87,31.08 49.8,30 54,30z"/>
+    <!-- subtle crater -->
+    <path
+        android:fillColor="#D0D7E2"
+        android:fillAlpha="0.45"
+        android:pathData="M62,44a3.5,3.5 0 1,0 0.01,0z"/>
+    <path
+        android:fillColor="#D0D7E2"
+        android:fillAlpha="0.35"
+        android:pathData="M68,56a2.2,2.2 0 1,0 0.01,0z"/>
+</vector>

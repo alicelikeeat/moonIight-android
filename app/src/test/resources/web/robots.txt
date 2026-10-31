@@ -1,0 +1,9 @@
+# test robots
+User-agent: *
+Disallow: /private/
+Disallow: /*.pdf$
+Allow: /private/public-ok
+Crawl-delay: 2
+
+User-agent: BadBot
+Disallow: /
