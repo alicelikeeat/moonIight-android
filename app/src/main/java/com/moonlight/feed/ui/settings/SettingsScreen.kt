@@ -177,6 +177,7 @@ class SettingsActions(
     val setVirtualInterval: (Int) -> Unit = {},
     val setVirtualProvider: (String) -> Unit = {},
     val setVirtualKey: (String) -> Unit = {},
+    val setDockHideSec: (Int) -> Unit = {},
 )
 
 private fun platformSubtitle(id: String, s: SettingsRepository.Snapshot) = when (id) {
@@ -469,6 +470,7 @@ private fun SettingsMain(onOpenSources: () -> Unit) {
         setVirtualInterval = { v -> scope.launch { app.settings.setVirtualInterval(v) } },
         setVirtualProvider = { v -> scope.launch { app.settings.setVirtualProvider(v) } },
         setVirtualKey = { v -> scope.launch { app.settings.setVirtualKey(v) } },
+        setDockHideSec = { v -> scope.launch { app.settings.setDockHideSec(v) } },
     )
     SettingsContent(s, actions, hiddenCount = app.library.items.collectAsState().value.count { it.hidden }, userSources = userSources, social = social, appIcon = appIcon)
 }
@@ -903,7 +905,7 @@ fun gestureGuide(mode: com.moonlight.feed.data.MenuSelect): List<Pair<String, St
         "库" to "点按缩略图 = 打开 · 长按 = 收藏 · 发朋友圈 · 分享·保存 · 多选",
         "消息" to "长按消息 = 复制 · 回复 · 改发言人 · 撤回",
         "● 拍摄" to "点按打开相机；长按 = 拍照 · 录像 · 导入 · 发朋友圈",
-        "底栏" to "手指从底栏开始：横向拖动切换页面；静止长按打开该按钮的圆环，不会顺手切页。内容画在底栏下面时，落在底栏上的手指仍归底栏",
+        "底栏" to "手指从底栏开始：横向拖动切换页面；静止长按打开该按钮的圆环，不会顺手切页。内容画在底栏下面时，落在底栏上的手指仍归底栏。无操作后底栏可以自动淡出，轻点底部再显示",
         "滚动" to "手指一移动，长按就失败；快速滑动保持为滚动。列表还在拖动或减速时不开始长按。点按和长按互斥",
         "菜单样式" to "弹出菜单（默认）/ 跟手圆形玻璃 / 水滴融合（可选，默认关闭）/ 玻璃气泡分离。旋转、荷花、星轨、月光仍是打开动画",
         "发现" to "右上角切换单列或双列，横幅大小可调。下拉刷新。首页可随机添加 10 / 15 / 20 条",

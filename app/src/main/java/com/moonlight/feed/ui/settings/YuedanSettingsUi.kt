@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.moonlight.feed.data.DockHide
 import com.moonlight.feed.data.HoldPresent
 import com.moonlight.feed.data.SettingsRepository
 import com.moonlight.feed.data.TabDock
@@ -49,6 +50,14 @@ fun YuedanAppearanceRows(s: SettingsRepository.Snapshot, a: SettingsActions) {
         Icons.Outlined.TouchApp, LocalMoonColors.current.accent,
         TabDock.entries.map { it.label }, dock.ordinal,
     ) { a.setTabDock(TabDock.entries[it].name) }
+    SettingsDivider()
+    val hide = DockHide.normalize(s.dockHideSec)
+    SegmentRow(
+        "底栏自动隐藏",
+        if (hide <= 0) "底栏一直显示" else "无操作 ${hide} 秒后淡出，轻点屏幕底部会再显示",
+        Icons.Outlined.TouchApp, LocalMoonColors.current.accent,
+        DockHide.CHOICES.map { DockHide.label(it) }, DockHide.CHOICES.indexOf(hide).coerceAtLeast(0),
+    ) { a.setDockHideSec(DockHide.CHOICES[it]) }
 }
 
 @Composable
