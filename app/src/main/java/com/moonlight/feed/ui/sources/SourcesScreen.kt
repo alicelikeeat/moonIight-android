@@ -334,7 +334,7 @@ fun SourcesContent(
             if (sources.isEmpty()) item(key = "empty") {
                 MoonEmptyState(
                     "还没有网址源",
-                    "添加任意公开网页地址。月光会解析页面中的图片与视频，「随机」模式还会在同站内随机跟随少量链接，抽样加入信息流。",
+                    "添加任意公开网页地址。月淡会解析页面中的图片与视频，「随机」模式还会在同站内随机跟随少量链接，抽样加入信息流。",
                     modifier = Modifier.padding(top = 24.dp),
                 )
             } else {

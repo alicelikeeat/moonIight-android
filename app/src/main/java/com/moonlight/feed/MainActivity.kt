@@ -33,6 +33,7 @@ import com.moonlight.feed.ui.design.ring
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Home
@@ -153,6 +154,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 LaunchedEffect(Unit) { AppBus.goTab.collect { select(it) } }
+                LaunchedEffect(Unit) {
+                    AppBus.importCount.collect { n ->
+                        val added = runCatching { com.moonlight.feed.data.ContentImport.fetch(app, n) }.getOrDefault(emptyList())
+                        added.forEach { e -> app.library.upsert(e); com.moonlight.feed.data.SaveHelper.maybeSaveEntry(e) }
+                        if (added.isNotEmpty()) AppBus.focusFeed(added.map { it.id })
+                        MoonToaster.show(if (added.isEmpty()) "没有拿到新内容" else "已随机添加 ${added.size} 条", Icons.Outlined.Shuffle)
+                    }
+                }
                 // v5.0 录屏 results (saved → 库, declined, failed)
                 LaunchedEffect(Unit) { com.moonlight.feed.data.record.ScreenRecorder.state.collect { st -> recResultToast(st) { select(1) } } }
                 // v5.0 全部按键: this tab's ring + app-wide actions
@@ -302,6 +311,7 @@ fun tabMenu(
                 scope = { s -> go(0); AppBus.feedScopeRequest.value = s },
                 toggleShuffle = home.toggleShuffle,
                 toggleMute = home.toggleMute,
+                addRandom = { n -> AppBus.requestImport(n) },
             ),
             origin = com.moonlight.feed.ui.feed.liftedAbove(anchor),
             overMedia = onFeed,   // v4.3: long-pressing 首页 from 我 / 朋友圈 etc. follows the theme
@@ -319,6 +329,7 @@ fun tabMenu(
             MenuAction("只看收藏", Icons.Outlined.Favorite) { go(1); AppBus.send(AppEvent.LIB_FAVORITES) },
         )
         2 -> listOf(
+            MenuAction("切换单双列", Icons.Outlined.GridView) { go(2); AppBus.send(AppEvent.DISCOVER_LAYOUT) },
             MenuAction("随机一下", Icons.Outlined.Casino) { go(2); AppBus.send(AppEvent.DISCOVER_RANDOM) },
             MenuAction("粘贴链接", Icons.Outlined.ContentPaste) { go(2); AppBus.send(AppEvent.DISCOVER_PASTE) },
             MenuAction("库", Icons.Outlined.PhotoLibrary) { go(1) },

@@ -10,11 +10,14 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import java.io.File
 
 /** Tab long-press quick actions are broadcast here; screens collect what they handle. */
-enum class AppEvent { FEED_TOP, FEED_RANDOM, FEED_REFRESH, LIB_SELECT, LIB_FAVORITES, LIB_TRASH, DISCOVER_RANDOM, DISCOVER_PASTE, MOMENTS_COMPOSE, SOCIAL_FRIENDS, CHATS_NEW }
+enum class AppEvent { FEED_TOP, FEED_RANDOM, FEED_REFRESH, LIB_SELECT, LIB_FAVORITES, LIB_TRASH, DISCOVER_RANDOM, DISCOVER_LAYOUT, DISCOVER_PASTE, MOMENTS_COMPOSE, SOCIAL_FRIENDS, CHATS_NEW }
 
 object AppBus {
     val events = MutableSharedFlow<AppEvent>(extraBufferCapacity = 8)
     fun send(e: AppEvent) { events.tryEmit(e) }
+    /** Counted public-source import (10 / 15 / 20). Consumed by the activity so it works from any tab. */
+    val importCount = MutableSharedFlow<Int>(extraBufferCapacity = 4)
+    fun requestImport(n: Int) { importCount.tryEmit(com.moonlight.feed.data.RandomBatch.normalize(n)) }
 
     /** Ask 首页 to show these ids first (in order) and land on the first one; consumed by FeedScreen. */
     val feedFocus = kotlinx.coroutines.flow.MutableStateFlow<List<String>?>(null)

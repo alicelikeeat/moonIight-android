@@ -350,13 +350,13 @@ fun CameraPermissionExplainer(state: PermState, camera: Boolean, mic: Boolean, o
             }
             Spacer(Modifier.height(16.dp))
             Text(
-                when (state) { PermState.ASK -> "允许月光使用相机"; else -> "未获得相机权限" },
+                when (state) { PermState.ASK -> "允许月淡使用相机"; else -> "未获得相机权限" },
                 color = Color.White, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(8.dp))
             Text(
                 when (state) {
-                    PermState.ASK -> "拍摄的照片和视频会直接加入月光媒体库并出现在首页。录像需要麦克风来录制声音。内容只保存在本机。"
+                    PermState.ASK -> "拍摄的照片和视频会直接加入月淡媒体库并出现在首页。录像需要麦克风来录制声音。内容只保存在本机。"
                     PermState.DENIED -> "没有相机权限就无法拍摄。你可以再次授权，或稍后从「从相册导入」添加内容。"
                     PermState.BLOCKED -> "相机权限已被关闭。请在 系统设置 › 权限 中允许「相机」（录像可选「麦克风」）。"
                 },

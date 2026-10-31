@@ -52,7 +52,7 @@ class RecordService : Service() {
             nm.createNotificationChannel(NotificationChannel(CHANNEL, "录屏", NotificationManager.IMPORTANCE_LOW))
         val stop = PendingIntent.getService(this, 1, Intent(this, RecordService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, CHANNEL).setSmallIcon(android.R.drawable.presence_video_online)
-            .setContentTitle("月光 · 正在录屏").setContentText("点「停止」保存到 库").setOngoing(true)
+            .setContentTitle("月淡 · 正在录屏").setContentText("点「停止」保存到 库").setOngoing(true)
             .addAction(0, "停止", stop).setContentIntent(stop).build()
     }
 

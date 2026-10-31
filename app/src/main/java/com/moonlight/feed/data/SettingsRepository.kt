@@ -67,6 +67,15 @@ class SettingsRepository(private val ctx: Context) {
         val v5 = stringPreferencesKey("v5_prefs")
         val chatServerUrl = stringPreferencesKey("chat_server_url")
         val recentSearches = stringPreferencesKey("recent_searches")
+        val portraitPlayback = booleanPreferencesKey("portrait_playback")
+        val holdPresent = stringPreferencesKey("hold_present")
+        val tabDock = stringPreferencesKey("tab_dock")
+        val discoverColumns = intPreferencesKey("discover_columns")
+        val discoverBanner = intPreferencesKey("discover_banner")
+        val virtualFriends = booleanPreferencesKey("virtual_friends")
+        val virtualInterval = intPreferencesKey("virtual_interval")
+        val virtualProvider = stringPreferencesKey("virtual_provider")
+        val virtualKey = stringPreferencesKey("virtual_key")
     }
 
     val defaultsKeywords = setOf(
@@ -129,6 +138,19 @@ class SettingsRepository(private val ctx: Context) {
         val buttonSkins: String = "",
         /** v5.0 options blob. */
         val v5: String = "",
+        /** v6.0: video playback stays portrait unless the user turns this off. */
+        val portraitPlayback: Boolean = true,
+        /** 弹出菜单 / 跟手 / 水滴 / 气泡. Default is popover; 水滴 is opt-in. */
+        val holdPresent: String = HoldPresent.DEFAULT,
+        val tabDock: String = TabDock.DEFAULT,
+        val discoverColumns: Int = 2,
+        /** Banner height as a percent, 75…135. */
+        val discoverBanner: Int = 100,
+        /** Local virtual-friend posts. Off until the user enables them. */
+        val virtualFriends: Boolean = false,
+        val virtualInterval: Int = 30,
+        val virtualProvider: String = "openai",
+        val virtualKey: String = "",
     ) {
         fun buttonSkinPrefs(): ButtonSkinPrefs = ButtonSkinPrefs.decode(buttonSkins)
         fun v5Prefs(): V5Prefs = V5Prefs.decode(v5, momentsAutoplay)
@@ -185,6 +207,15 @@ class SettingsRepository(private val ctx: Context) {
             recentSearches = p[K.recentSearches]?.split('\n')?.filter { it.isNotBlank() } ?: emptyList(),
             buttonSkins = p[K.buttonSkins] ?: "",
             v5 = p[K.v5] ?: "",
+            portraitPlayback = p[K.portraitPlayback] ?: true,
+            holdPresent = HoldPresent.of(p[K.holdPresent]).name,
+            tabDock = TabDock.of(p[K.tabDock]).name,
+            discoverColumns = DiscoverLayout.columns(p[K.discoverColumns] ?: 2),
+            discoverBanner = (p[K.discoverBanner] ?: 100).coerceIn(75, 135),
+            virtualFriends = p[K.virtualFriends] ?: false,
+            virtualInterval = VirtualCopy.intervalMinutes(p[K.virtualInterval] ?: 30),
+            virtualProvider = p[K.virtualProvider] ?: "openai",
+            virtualKey = p[K.virtualKey] ?: "",
         )
     }
 
@@ -224,6 +255,15 @@ class SettingsRepository(private val ctx: Context) {
     suspend fun setMenuSelect(v: String) = ctx.dataStore.edit { it[K.menuSelect] = MenuSelect.of(v).name }
     suspend fun setRingAnim(v: String) = ctx.dataStore.edit { it[K.ringAnim] = RingAnimPick.normalize(v) }
     suspend fun setRingAnimSet(v: Set<RingAnim>) = ctx.dataStore.edit { it[K.ringAnimSet] = RingAnimPick.encodeSet(v) }
+    suspend fun setPortraitPlayback(v: Boolean) = ctx.dataStore.edit { it[K.portraitPlayback] = v }
+    suspend fun setHoldPresent(v: String) = ctx.dataStore.edit { it[K.holdPresent] = HoldPresent.of(v).name }
+    suspend fun setTabDock(v: String) = ctx.dataStore.edit { it[K.tabDock] = TabDock.of(v).name }
+    suspend fun setDiscoverColumns(v: Int) = ctx.dataStore.edit { it[K.discoverColumns] = DiscoverLayout.columns(v) }
+    suspend fun setDiscoverBanner(v: Int) = ctx.dataStore.edit { it[K.discoverBanner] = v.coerceIn(75, 135) }
+    suspend fun setVirtualFriends(v: Boolean) = ctx.dataStore.edit { it[K.virtualFriends] = v }
+    suspend fun setVirtualInterval(v: Int) = ctx.dataStore.edit { it[K.virtualInterval] = VirtualCopy.intervalMinutes(v) }
+    suspend fun setVirtualProvider(v: String) = ctx.dataStore.edit { it[K.virtualProvider] = if (v.equals("grok", true)) "grok" else "openai" }
+    suspend fun setVirtualKey(v: String) = ctx.dataStore.edit { it[K.virtualKey] = v.trim() }
 
     /**
      * Read-modify-write of 首页背景. Writes both slots explicitly and retires the legacy single path, so switching

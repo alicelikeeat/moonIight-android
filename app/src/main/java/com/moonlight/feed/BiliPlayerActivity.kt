@@ -148,6 +148,8 @@ class BiliPlayerActivity : ComponentActivity() {
                 val cfg = com.moonlight.feed.ui.design.revealConfig(this@BiliPlayerActivity, s.revealOn, s.revealSpeed)
                 revealMs = if (cfg.enabled) cfg.ms else 0
                 resumeOnReturn = s.resumeOnReturn
+                requestedOrientation = if (s.portraitPlayback) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
             }
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

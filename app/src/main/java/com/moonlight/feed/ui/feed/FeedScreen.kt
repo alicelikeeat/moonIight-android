@@ -291,6 +291,7 @@ class HomeRingHandlers(
     val scope: (com.moonlight.feed.data.FeedScope) -> Unit = {},
     val toggleShuffle: () -> Unit = {},
     val toggleMute: () -> Unit = {},
+    val addRandom: (Int) -> Unit = {},
 )
 
 /**
@@ -311,11 +312,16 @@ fun homeRing(
         MenuAction("重新洗牌", Icons.Outlined.Refresh, onClick = h.reshuffle),
         MenuAction("回到顶部", Icons.Outlined.VerticalAlignTop, onClick = h.top),
     ),
-    actions = listOf(listOf(
-        MenuAction("随机顺序", Icons.Outlined.Casino, checked = shuffle, subtitle = if (shuffle) "开" else "关", onClick = h.toggleShuffle),
-        MenuAction(if (muted) "打开声音" else "静音", if (muted) Icons.AutoMirrored.Outlined.VolumeOff else Icons.AutoMirrored.Outlined.VolumeUp, checked = muted, onClick = h.toggleMute),
-    )),
-    groupTitles = listOf("首页"),
+    actions = listOf(
+        listOf(
+            MenuAction("随机顺序", Icons.Outlined.Casino, checked = shuffle, subtitle = if (shuffle) "开" else "关", onClick = h.toggleShuffle),
+            MenuAction(if (muted) "打开声音" else "静音", if (muted) Icons.AutoMirrored.Outlined.VolumeOff else Icons.AutoMirrored.Outlined.VolumeUp, checked = muted, onClick = h.toggleMute),
+        ),
+        com.moonlight.feed.data.RandomBatch.CHOICES.map { n ->
+            MenuAction("随机添加 $n 条", Icons.Outlined.Shuffle, onClick = { h.addRandom(n) })
+        },
+    ),
+    groupTitles = listOf("首页", "内容源"),
 )
 
 /** The counter pill sits in the top-right corner: hang its ring below it, centred, so no label clips at the edge. */
@@ -508,6 +514,7 @@ fun FeedScreen(chromeVisible: Boolean, onToggleChrome: () -> Unit, onGoDiscover:
         scope = { s -> setScope(s) },
         toggleShuffle = { scope.launch { app.settings.setShuffle(!settings.shuffle) } },
         toggleMute = { scope.launch { app.settings.setMuted(!settings.muted) } },
+        addRandom = { n -> AppBus.requestImport(n) },
     )
     LaunchedEffect(Unit) {
         AppBus.events.collect { e ->
@@ -532,7 +539,7 @@ fun FeedScreen(chromeVisible: Boolean, onToggleChrome: () -> Unit, onGoDiscover:
             title = "删除这条内容？",
             message = target.title.ifBlank { null },
             actions = listOf(
-                MenuAction("从月光移除", destructive = true, subtitle = "移到 库 › 最近删除，可恢复", onClick = {
+                MenuAction("从月淡移除", destructive = true, subtitle = "移到 库 › 最近删除，可恢复", onClick = {
                     com.moonlight.feed.ui.library.TrashUi.trashEntries(listOf(target))
                 }),
                 MenuAction("同时从相册删除", destructive = true, onClick = {
@@ -630,7 +637,14 @@ fun FeedScreen(chromeVisible: Boolean, onToggleChrome: () -> Unit, onGoDiscover:
                             if (feedScope == com.moonlight.feed.data.FeedScope.LOCAL) "拍摄、导入或下载的图片与视频会出现在这里" else "嵌入播放（B 站、YouTube 等）与网络视频会出现在这里",
                             action = "显示全部", onAction = { setScope(com.moonlight.feed.data.FeedScope.ALL) },
                         )
-                    } else MoonEmptyState("还没有内容", "导入本地视频 / 图片，或去发现页添加", action = "去发现", onAction = onGoDiscover)
+                    } else Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        MoonEmptyState("还没有内容", "导入本地视频 / 图片，下拉发现页刷新，或随机添加公开内容。", action = "去发现", onAction = onGoDiscover)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
+                            com.moonlight.feed.data.RandomBatch.CHOICES.forEach { n ->
+                                com.moonlight.feed.ui.design.GlassPill("随机 $n", { AppBus.requestImport(n) })
+                            }
+                        }
+                    }
                 }
             }
         } else {
@@ -724,6 +738,7 @@ fun FeedScreen(chromeVisible: Boolean, onToggleChrome: () -> Unit, onGoDiscover:
                         onRandom = { dismiss(); scope.launch { pager.scrollToPage(list.indices.random()) } })
                 }
             },
+            onRandomBatch = { n -> AppBus.requestImport(n) },
         )
     }
 }
@@ -901,6 +916,7 @@ fun FeedTopChrome(
     haze: HazeState? = null,
     onCounterClick: () -> Unit = {},
     onCounterLongPress: (Rect) -> Unit = {},
+    onRandomBatch: ((Int) -> Unit)? = null,
 ) {
     val anchor = rememberAnchor()
     val skin = com.moonlight.feed.ui.design.rememberButtonSkin("player.counter")
@@ -915,6 +931,24 @@ fun FeedTopChrome(
                 Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                Text("月淡", color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp))
+                if (onRandomBatch != null) {
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        com.moonlight.feed.ui.design.GlassIconButton(
+                            Icons.Outlined.Shuffle, "随便看看", { menu = true },
+                            size = 40.dp, iconSize = 18.dp, colors = MediaGlass,
+                        )
+                        androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            com.moonlight.feed.data.RandomBatch.CHOICES.forEach { n ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("随机添加 $n 条") },
+                                    onClick = { menu = false; onRandomBatch(n) },
+                                )
+                            }
+                        }
+                    }
+                }
                 Spacer(Modifier.weight(1f))
                 Box(
                     Modifier

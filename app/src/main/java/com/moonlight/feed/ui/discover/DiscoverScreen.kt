@@ -48,10 +48,14 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Shuffle
+import androidx.compose.material.icons.outlined.ViewAgenda
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -82,6 +86,7 @@ import com.moonlight.feed.data.MediaKind
 import com.moonlight.feed.data.PlatformId
 import com.moonlight.feed.data.PlatformResolver
 import com.moonlight.feed.data.RemoteApis
+import com.moonlight.feed.data.DiscoverLayout
 import com.moonlight.feed.data.SaveHelper
 import com.moonlight.feed.ui.AppBus
 import com.moonlight.feed.ui.AppEvent
@@ -127,7 +132,7 @@ fun discoverMenuSpec(e: MediaEntry, anchor: Rect, added: Boolean, h: DiscoverHan
     preview = { CardPreview(e) },
     actions = listOf(
         listOf(
-            MenuAction(if (added) "已加入" else "加入月光", if (added) Icons.Outlined.CheckCircle else Icons.Outlined.Add, checked = added) { h.onAdd(e) },
+            MenuAction(if (added) "已加入" else "加入月淡", if (added) Icons.Outlined.CheckCircle else Icons.Outlined.Add, checked = added) { h.onAdd(e) },
             MenuAction("打开原页", Icons.AutoMirrored.Outlined.OpenInNew, subtitle = e.platformLabel()) { h.onOpenOriginal(e) },
             MenuAction("分享", Icons.Outlined.Share) { h.onShare(e) },
         ),
@@ -306,6 +311,7 @@ fun DiscoverScreen() {
         AppBus.events.collect {
             when (it) {
                 AppEvent.DISCOVER_RANDOM -> randomAdd()
+                AppEvent.DISCOVER_LAYOUT -> scope.launch { app.settings.setDiscoverColumns(DiscoverLayout.toggle(settings.discoverColumns)) }
                 AppEvent.DISCOVER_PASTE -> openUrlSheet(clipboardText(ctx))
                 else -> Unit
             }
@@ -409,6 +415,10 @@ fun DiscoverScreen() {
             Haptics.open(view)
             overlay.showMenu(discoverMenuSpec(e, r, e.id in addedIds, handlers))
         },
+        columns = DiscoverLayout.columns(settings.discoverColumns),
+        bannerScale = DiscoverLayout.scale(settings.discoverBanner / 100f),
+        onToggleColumns = { scope.launch { app.settings.setDiscoverColumns(DiscoverLayout.toggle(settings.discoverColumns)) } },
+        onBannerScale = { v -> scope.launch { app.settings.setDiscoverBanner(DiscoverLayout.percent(v)) } },
         onAddLongPress = { r ->
             Haptics.open(view)
             overlay.showMenu(
@@ -470,13 +480,26 @@ fun DiscoverContent(
     onAddLongPress: (Rect) -> Unit = {},
     search: SearchUiState? = null,
     sh: SearchHandlers = SearchHandlers(),
+    columns: Int = 2,
+    bannerScale: Float = 1f,
+    onToggleColumns: () -> Unit = {},
+    onBannerScale: (Float) -> Unit = {},
 ) {
     val c = LocalMoonColors.current
     val pull = rememberPullToRefreshState()
     var searchFocused by remember { mutableStateOf(false) }
     val addAnchor = rememberAnchor()
     Column(Modifier.fillMaxSize()) {
+        val cols = DiscoverLayout.columns(columns)
+        var draggingScale by remember { mutableStateOf(false) }
+        var scaleDraft by remember { mutableFloatStateOf(bannerScale) }
+        val shownScale = if (draggingScale) scaleDraft else bannerScale
         ScreenHeader("发现", subtitle = "官方嵌入 · 公开接口") {
+            GlassIconButton(
+                if (cols == 1) Icons.Outlined.GridView else Icons.Outlined.ViewAgenda,
+                "切换单双列",
+                onToggleColumns,
+            )
             GlassIconButton(Icons.Outlined.Refresh, "刷新", onRefresh, onLongClick = onToggleRandom, skinId = "discover.refresh")
             GlassIconButton(
                 Icons.Outlined.Add, "添加", onPaste,
@@ -499,6 +522,18 @@ fun DiscoverContent(
             ) {
                 DISCOVER_TABS.forEach { t -> MoonChip(t, tab == t, { onTab(t) }) }
                 MoonChip(if (randomOn) "随机 · 开" else "随机 · 关", randomOn, onToggleRandom, icon = Icons.Outlined.Shuffle)
+            }
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 2.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("横幅大小", color = c.text, style = MaterialTheme.typography.labelLarge)
+                    Text("${DiscoverLayout.percent(shownScale)}%", color = c.textDim, style = MaterialTheme.typography.labelMedium)
+                }
+                Slider(
+                    value = shownScale,
+                    onValueChange = { draggingScale = true; scaleDraft = it },
+                    onValueChangeFinished = { onBannerScale(scaleDraft); draggingScale = false },
+                    valueRange = DiscoverLayout.MIN_SCALE..DiscoverLayout.MAX_SCALE,
+                )
             }
         }
         PullToRefreshBox(
@@ -575,7 +610,18 @@ fun DiscoverContent(
                         )
                     }
                 } else {
-                    items(cards, key = { it.id }) { e -> DiscoverCardView(e, e.id in addedIds, { onCardClick(e) }, { r -> onCardLongPress(e, r) }) }
+                    val mediaH = DiscoverLayout.cardHeightDp(cols, shownScale).dp
+                    val rows = cards.chunked(cols)
+                    items(rows.size, key = { i -> "d-row-" + rows[i].joinToString("-") { it.id } }) { i ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            rows[i].forEach { e ->
+                                Box(Modifier.weight(1f)) {
+                                    DiscoverCardView(e, e.id in addedIds, { onCardClick(e) }, { r -> onCardLongPress(e, r) }, mediaH)
+                                }
+                            }
+                            repeat(cols - rows[i].size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
                 }
             }
         }
@@ -613,7 +659,7 @@ private fun SkeletonCard() {
 }
 
 @Composable
-private fun DiscoverCardView(e: MediaEntry, added: Boolean, onClick: () -> Unit, onLongClick: (Rect) -> Unit) {
+private fun DiscoverCardView(e: MediaEntry, added: Boolean, onClick: () -> Unit, onLongClick: (Rect) -> Unit, mediaHeight: androidx.compose.ui.unit.Dp = 180.dp) {
     val c = LocalMoonColors.current
     val a = remember { AnchorState() }
     Column(
@@ -624,7 +670,7 @@ private fun DiscoverCardView(e: MediaEntry, added: Boolean, onClick: () -> Unit,
             .glassStatic(RoundedCornerShape(22.dp))
             .padding(10.dp)
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp)).background(if (c.dark) Color(0xFF14161C) else Color(0xFFE4E1D6))) {
+        Box(Modifier.fillMaxWidth().height(mediaHeight).clip(RoundedCornerShape(16.dp)).background(if (c.dark) Color(0xFF14161C) else Color(0xFFE4E1D6))) {
             if (!e.coverUrl.isNullOrBlank()) MoonImage(e.coverUrl, Modifier.fillMaxSize())
             else Text(e.platformLabel(), color = c.textDim, style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.Center))
             GlassBadge(e.platformLabel(), Modifier.align(Alignment.TopStart).padding(10.dp))
