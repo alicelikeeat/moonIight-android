@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.AddComment
 import androidx.compose.material.icons.outlined.Camera
 import com.moonlight.feed.ui.design.MoonToaster
+import com.moonlight.feed.ui.design.moonPress
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -28,6 +29,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import com.moonlight.feed.ui.design.ring
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -118,6 +123,9 @@ class MainActivity : ComponentActivity() {
                 val overlay = remember { MoonOverlayState() }
                 var tabState by remember { mutableIntStateOf(0) }
                 var chrome by remember { mutableStateOf(true) }
+                val dockHideSec = com.moonlight.feed.data.DockHide.normalize(settings.dockHideSec)
+                var dockShown by remember { mutableStateOf(true) }
+                var dockBump by remember { mutableIntStateOf(0) }
                 val social by app.social.state.collectAsState()
                 // 消息 (5) is the right page of 朋友圈; 库 (1) / 设置 (3) are pages under 我 (6)
                 fun select(i: Int) {
@@ -176,6 +184,16 @@ class MainActivity : ComponentActivity() {
                     setMode = { m -> scope.launch { app.settings.setThemeMode(m.name) } },
                     capture = { v -> cameraLauncher.launch(CameraActivity.intent(this@MainActivity, video = v)) }) }
                 val view = LocalView.current
+                LaunchedEffect(dockHideSec, dockBump, overlay.menu, overlay.sheet) {
+                    if (dockHideSec <= 0 || overlay.menu != null || overlay.sheet != null) {
+                        dockShown = true
+                        return@LaunchedEffect
+                    }
+                    dockShown = true
+                    kotlinx.coroutines.delay(dockHideSec * 1000L)
+                    if (overlay.menu == null && overlay.sheet == null) dockShown = false
+                }
+                fun bumpDock() { dockShown = true; dockBump++ }
                 LaunchedEffect(chrome, tab, dark, com.moonlight.feed.ui.social.SocialNav.page, com.moonlight.feed.ui.social.SocialNav.moments.size) {
                     val window = this@MainActivity.window
                     val controller = WindowInsetsControllerCompat(window, window.decorView)
@@ -192,13 +210,15 @@ class MainActivity : ComponentActivity() {
                     overlay = overlay,
                     tab = tab,
                     badges = mapOf(4 to social.totalUnread),
-                    tabBarVisible = (chrome || tab != 0) && !(tab == 4 && com.moonlight.feed.ui.social.SocialNav.immersive),
+                    tabBarVisible = dockShown && (chrome || tab != 0) && !(tab == 4 && com.moonlight.feed.ui.social.SocialNav.immersive),
+                    onDockReveal = if (!dockShown && (chrome || tab != 0)) ({ bumpDock() }) else null,
                     onTab = { i ->
+                        bumpDock()
                         if (i == tab && i == 0) AppBus.send(AppEvent.FEED_TOP)
                         if (i == 4 && tab == 4) com.moonlight.feed.ui.social.SocialNav.page = 0
                         select(i); if (i == 0) chrome = true
                     },
-                    onCapture = { cameraLauncher.launch(CameraActivity.intent(this@MainActivity, video = false)) },
+                    onCapture = { bumpDock(); cameraLauncher.launch(CameraActivity.intent(this@MainActivity, video = false)) },
                     onCaptureLong = { rect ->
                         Haptics.open(view)
                         overlay.showMenu(captureMenu(rect, tab == 0,
@@ -393,12 +413,23 @@ fun MoonShell(
     onTabLongPress: (Int, Rect) -> Unit = { _, _ -> },
     onCapture: () -> Unit = {},
     onCaptureLong: (Rect) -> Unit = {},
+    onDockReveal: (() -> Unit)? = null,
     content: @Composable (Int) -> Unit,
 ) {
     MoonOverlayHost(
         overlay,
         chrome = {
             Box(Modifier.align(Alignment.BottomCenter)) {
+                if (onDockReveal != null) {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(36.dp)
+                            .navigationBarsPadding()
+                            .moonPress(onDockReveal, highlightShape = null),
+                    )
+                }
                 AnimatedVisibility(
                     visible = tabBarVisible && (overlay.liftKey == null),
                     enter = fadeIn(spring(stiffness = 400f)) + slideInVertically(spring(0.75f, 400f)) { it },

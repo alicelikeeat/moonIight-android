@@ -190,12 +190,28 @@ fun LibraryScreen() {
     var filter by remember { mutableStateOf("全部") }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
-    val filtered = remember(items, filter) { libFilter(items, filter) }
+    val shelfFile = remember { java.io.File(app.filesDir, "library-shelves.json") }
+    var book by remember { mutableStateOf(com.moonlight.feed.data.ShelfJson.read(shelfFile)) }
+    var shelfId by remember { mutableStateOf<String?>(null) }
+    var shelfDraft by remember { mutableStateOf("") }
+    var shelfDialog by remember { mutableStateOf<String?>(null) }
+    fun commit(next: com.moonlight.feed.data.ShelfBook) {
+        book = next
+        com.moonlight.feed.data.ShelfJson.write(shelfFile, next)
+    }
+    val filtered = remember(items, filter, book, shelfId) {
+        val base = libFilter(items, filter)
+        val id = shelfId
+        if (id == null || filter == TRASH_FILTER) base else book.matching(base, { it.id }, id)
+    }
 
     LaunchedEffect(Unit) {
         AppBus.events.collect {
             when (it) {
-                AppEvent.LIB_SELECT -> selectionMode = true
+                AppEvent.LIB_SELECT -> {
+                    selectionMode = true
+                    selectedIds = filtered.map { e -> e.id }.toSet()
+                }
                 AppEvent.LIB_FAVORITES -> filter = "收藏"
                 AppEvent.LIB_TRASH -> filter = TRASH_FILTER
                 else -> Unit
@@ -285,6 +301,28 @@ fun LibraryScreen() {
             }
         },
         onSelectAll = { selectedIds = if (selectedIds.size == filtered.size) emptySet() else filtered.map { it.id }.toSet() },
+        shelves = book.shelves,
+        activeShelf = shelfId,
+        onShelf = { shelfId = it },
+        onCreateShelf = { shelfDraft = ""; shelfDialog = "create" },
+        onRenameShelf = {
+            shelfDraft = book.shelves.firstOrNull { it.id == shelfId }?.name.orEmpty()
+            shelfDialog = "rename"
+        },
+        onDeleteShelf = {
+            val id = shelfId
+            if (id != null) {
+                commit(book.delete(id))
+                shelfId = null
+                MoonToaster.show("已删除片单，内容仍在库里", Icons.Outlined.Delete)
+            }
+        },
+        onMoveSelection = { target ->
+            commit(book.move(selectedIds, target))
+            MoonToaster.show(if (target == null) "已移出片单" else "已移入片单", Icons.Outlined.CheckCircle)
+            selectionMode = false
+            selectedIds = emptySet()
+        },
         onFavoriteSelected = {
             val ids = selectedIds
             ids.forEach { id -> lib.update(id) { it.copy(favorite = true) } }
@@ -293,6 +331,37 @@ fun LibraryScreen() {
         },
         onDeleteSelected = { confirmDelete(items.filter { it.id in selectedIds }) },
     )
+    if (shelfDialog != null) {
+        val c = LocalMoonColors.current
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { shelfDialog = null },
+            title = { Text(if (shelfDialog == "rename") "重命名片单" else "新建片单") },
+            text = {
+                androidx.compose.foundation.text.BasicTextField(
+                    value = shelfDraft,
+                    onValueChange = { shelfDraft = it },
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.text),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(c.accent),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    val next = if (shelfDialog == "rename") shelfId?.let { book.rename(it, shelfDraft) } else book.create(shelfDraft)?.first
+                    if (next == null) MoonToaster.show("名称是空的，或已经有同名片单", Icons.Outlined.ErrorOutline)
+                    else {
+                        val created = if (shelfDialog == "create") next.shelves.lastOrNull()?.id else null
+                        commit(next)
+                        if (created != null) shelfId = created
+                    }
+                    shelfDialog = null
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { shelfDialog = null }) { Text("取消") }
+            },
+        )
+    }
 }
 
 // =================================================================== stateless content
@@ -316,6 +385,13 @@ fun LibraryContent(
     trash: List<com.moonlight.feed.data.trash.TrashItem> = emptyList(),
     trashHandlers: TrashHandlers = TrashHandlers(),
     now: Long = System.currentTimeMillis(),
+    shelves: List<com.moonlight.feed.data.Shelf> = emptyList(),
+    activeShelf: String? = null,
+    onShelf: (String?) -> Unit = {},
+    onCreateShelf: () -> Unit = {},
+    onRenameShelf: () -> Unit = {},
+    onDeleteShelf: () -> Unit = {},
+    onMoveSelection: (String?) -> Unit = {},
 ) {
     val c = LocalMoonColors.current
     val dlTab = filter == com.moonlight.feed.data.download.DownloadPolicy.CATEGORY
@@ -333,6 +409,29 @@ fun LibraryContent(
                 LIB_FILTERS.forEach { t ->
                     val active = if (t == com.moonlight.feed.data.download.DownloadPolicy.CATEGORY) downloads.count { it.active } else 0
                     MoonChip(when { active > 0 -> "$t · $active"; t == TRASH_FILTER && trash.isNotEmpty() -> "$t · ${trash.size}"; else -> t }, filter == t, { onFilter(t) })
+                }
+            }
+            if (filter != TRASH_FILTER) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    MoonChip("全部片单", activeShelf == null, { onShelf(null) })
+                    shelves.forEach { shelf -> MoonChip(shelf.name, activeShelf == shelf.id, { onShelf(shelf.id) }) }
+                    MoonChip("新建片单", false, onCreateShelf)
+                    if (activeShelf != null) {
+                        MoonChip("重命名", false, onRenameShelf)
+                        MoonChip("删除片单", false, onDeleteShelf)
+                    }
+                }
+                if (selectionMode && selectedIds.isNotEmpty() && shelves.isNotEmpty()) {
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        shelves.forEach { shelf -> MoonChip("移入 ${shelf.name}", false, { onMoveSelection(shelf.id) }) }
+                        MoonChip("移出片单", false, { onMoveSelection(null) })
+                    }
                 }
             }
             if (filter == TRASH_FILTER) {

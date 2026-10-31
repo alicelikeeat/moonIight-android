@@ -76,6 +76,7 @@ class SettingsRepository(private val ctx: Context) {
         val virtualInterval = intPreferencesKey("virtual_interval")
         val virtualProvider = stringPreferencesKey("virtual_provider")
         val virtualKey = stringPreferencesKey("virtual_key")
+        val dockHideSec = intPreferencesKey("dock_hide_sec")
     }
 
     val defaultsKeywords = setOf(
@@ -151,6 +152,8 @@ class SettingsRepository(private val ctx: Context) {
         val virtualInterval: Int = 30,
         val virtualProvider: String = "openai",
         val virtualKey: String = "",
+        /** 0 keeps the dock up. Default 5 seconds, same choices as iOS v1.43. */
+        val dockHideSec: Int = 5,
     ) {
         fun buttonSkinPrefs(): ButtonSkinPrefs = ButtonSkinPrefs.decode(buttonSkins)
         fun v5Prefs(): V5Prefs = V5Prefs.decode(v5, momentsAutoplay)
@@ -216,6 +219,7 @@ class SettingsRepository(private val ctx: Context) {
             virtualInterval = VirtualCopy.intervalMinutes(p[K.virtualInterval] ?: 30),
             virtualProvider = p[K.virtualProvider] ?: "openai",
             virtualKey = p[K.virtualKey] ?: "",
+            dockHideSec = DockHide.normalize(p[K.dockHideSec] ?: 5),
         )
     }
 
@@ -264,6 +268,7 @@ class SettingsRepository(private val ctx: Context) {
     suspend fun setVirtualInterval(v: Int) = ctx.dataStore.edit { it[K.virtualInterval] = VirtualCopy.intervalMinutes(v) }
     suspend fun setVirtualProvider(v: String) = ctx.dataStore.edit { it[K.virtualProvider] = if (v.equals("grok", true)) "grok" else "openai" }
     suspend fun setVirtualKey(v: String) = ctx.dataStore.edit { it[K.virtualKey] = v.trim() }
+    suspend fun setDockHideSec(v: Int) = ctx.dataStore.edit { it[K.dockHideSec] = DockHide.normalize(v) }
 
     /**
      * Read-modify-write of 首页背景. Writes both slots explicitly and retires the legacy single path, so switching

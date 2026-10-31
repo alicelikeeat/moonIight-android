@@ -23,7 +23,7 @@ A signed release reads these environment variables and does not store them in th
 
 ## GitHub
 
-Push and pull request runs `.github/workflows/ci.yml`. A tag `v*` runs `.github/workflows/release.yml`, which signs `Yuedan-vX.Y.apk` from these repository secrets:
+Push and pull request runs `.github/workflows/ci.yml`. A tag `v*` runs `.github/workflows/release.yml`. If the signing secrets below are missing, that workflow finishes without building or uploading an APK. Once they exist, it signs `Yuedan-vX.Y.apk` and attaches it to the release:
 
 - `ANDROID_KEYSTORE_BASE64`
 - `ANDROID_KEYSTORE_PASSWORD`
